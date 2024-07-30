@@ -35,7 +35,7 @@ def intercom_data_ingestion_pipeline():
         }
 
     @task
-    def retrieve_last_update() -> str:
+    def retrieve_last_update(table_name: str) -> str:
         query = f"""
         SELECT MAX(updated_at) as last_update
         FROM `{env_name}.{dataset_name}.{table_name}`
@@ -68,7 +68,7 @@ def intercom_data_ingestion_pipeline():
             rate_limit_reset = response.headers.get("x-ratelimit-reset")
             logging.info(f"Rate limit remaining: {rate_limit_remaining}")
             
-            if int(rate_limit_remaining) < 10:
+            if int(rate_limit_remaining) < 15:
                 sleep_duration = max(0, int(rate_limit_reset) - int(pendulum.now("UTC").timestamp()))
                 logging.info(f"Rate limit threshold reached. Sleeping for {sleep_duration} seconds.")
                 time.sleep(sleep_duration)
@@ -118,8 +118,7 @@ def intercom_data_ingestion_pipeline():
         for record in data:
             record_id = record["id"]
             detail_url = f"{api_url}/{data_key}/{record_id}"
-            record_details = execute_request("GET", detail_url, headers=headers)
-            record_details["ingestion_time"] = current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+            record_details = execute_request("GET", detail_url, headers=headers))
             detailed_records.append(record_details)
 
         return detailed_records
@@ -158,7 +157,7 @@ def intercom_data_ingestion_pipeline():
         @task_group(group_id=f"{table_name}_workflow")
         def process_data():
             headers = generate_headers(api_key)
-            last_update_time = retrieve_last_update()
+            last_update_time = retrieve_last_update(table_name)
             raw_data = fetch_all_records(data_key, table_name, last_update_time, headers)
             detailed_data = retrieve_details(raw_data, data_key, headers)
             validate_task = validate_data_availability(detailed_data, table_name)
